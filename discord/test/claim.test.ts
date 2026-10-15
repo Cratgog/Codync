@@ -10,7 +10,7 @@ const env = {
   DISCORD_CLIENT_ID: "app", DISCORD_CLIENT_SECRET: "secret", DISCORD_BOT_TOKEN: "bot",
   GITHUB_CLIENT_ID: "ghapp", GITHUB_CLIENT_SECRET: "ghsecret", GITHUB_TOKEN: "gh", GITHUB_WEBHOOK_SECRET: "hook",
   SESSION_SECRET: "session", MENTIONS_SECRET: "notes", GUILD_ID: "guild", CONTRIBUTOR_ROLE_ID: "contributor", REPORTER_ROLE_ID: "reporter",
-  STAFF_CHANNEL_ID: "staff", REPO: "leepokai/Codync",
+  STAFF_CHANNEL_ID: "staff", MILESTONES_CHANNEL_ID: "milestones", STAR_GOAL: "1000", REPO: "leepokai/Codync",
   LINKS: { get: async (k: string) => links.get(k) ?? null, put: async (k: string, v: string) => void links.set(k, v) },
 } as never;
 
@@ -173,4 +173,29 @@ assert.deepEqual(await notes("- Fast mode. Thanks @octo (#101).\n@Octo, @other, 
   text: "- Fast mode. Thanks <@42> (#101).\n<@42>, @other, @nobody, a@octo.dev, `@octo_x`",
   users: ["42"],
 });
+// Stars: each 100th star posts once in #milestones, with progress toward the goal until it's reached.
+const posts: string[] = [];
+let up = true;
+globalThis.fetch = (async (input: string, init?: RequestInit) => {
+  assert.equal(String(input), "https://discord.com/api/v10/channels/milestones/messages");
+  if (!up) return new Response("down", { status: 503 });
+  posts.push(JSON.parse(String(init?.body)).content);
+  return Response.json({});
+}) as typeof fetch;
+const star = (count: number, action = "created") => hook("star", { action, repository: { stargazers_count: count } });
+assert.equal(await star(99), 204);
+assert.equal(await star(402, "deleted"), 204);
+assert.deepEqual(posts, []);
+up = false;
+assert.equal(await star(400), 204);
+assert.equal(links.get("stars:milestone"), undefined);
+up = true;
+for (const count of [402, 401, 400, 450, 1000, 1000, 1104]) assert.equal(await star(count), 204);
+const thanks = "Thanks to everyone who starred [leepokai/Codync](https://github.com/leepokai/Codync) 💛\n\n📣 ";
+assert.equal(posts.length, 3);
+assert.ok(posts[0].startsWith(`⭐ **Codync just hit 400 stars on GitHub!**\n\`████████░░░░░░░░░░░░\` 400 / 1,000\n${thanks}Help us reach 1,000: tell people about Codync on [X](https://x.com/intent/post?text=Codync%3A%20`));
+assert.ok(posts[1].startsWith(`🎉 **Codync hit 1,000 stars on GitHub, goal reached!**\n${thanks}Keep spreading the word on [X](`));
+assert.ok(posts[2].startsWith(`⭐ **Codync just hit 1,100 stars on GitHub!**\n${thanks}Keep spreading the word on [X](`));
+assert.match(posts[0], /\[Threads\]\(.+\) · \[Reddit\]\(.+url=https%3A%2F%2Fgithub.com%2Fleepokai%2FCodync.+\) · \[LinkedIn\]\(.+\), or wherever you hang out\.$/);
+assert.equal(links.get("stars:milestone"), "1100");
 console.log("claim tests ok");

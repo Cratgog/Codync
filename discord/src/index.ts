@@ -25,8 +25,11 @@ export interface Env {
   CONTRIBUTOR_ROLE_ID: string;
   REPORTER_ROLE_ID: string;
   STAFF_CHANNEL_ID: string;
+  MILESTONES_CHANNEL_ID: string;
+  /** The star count the #milestones posts count toward. */
+  STAR_GOAL: string;
   REPO: string;
-  /** `github:<GitHub user id>` → Discord user id. */
+  /** `github:<GitHub user id>` → Discord user id; `stars:milestone` → the last star milestone posted. */
   LINKS: KVNamespace;
 }
 
