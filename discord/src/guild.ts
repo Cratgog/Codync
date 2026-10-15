@@ -1,4 +1,4 @@
-// The Codync server: adding members, the GitHub roles they earn, and the staff channel notice.
+// The Codync server: adding members, the GitHub roles they earn, and posting to its channels.
 
 import { json } from "./http.ts";
 import type { Env } from "./index.ts";
@@ -71,13 +71,19 @@ export async function grant(env: Env, discordId: string, earned: Role[], reason:
   return missing;
 }
 
-/** Posts to the staff channel. A failure is logged and never fails the member's flow. */
-export async function notify(env: Env, content: string): Promise<void> {
-  const res = await fetch(`${DISCORD}/channels/${env.STAFF_CHANNEL_ID}/messages`, {
+/** Posts to a channel and says whether it went out. A failure is logged and never fails the caller's flow. */
+export async function send(env: Env, channelId: string, content: string): Promise<boolean> {
+  const res = await fetch(`${DISCORD}/channels/${channelId}/messages`, {
     method: "POST",
     headers: { ...bot(env), "Content-Type": "application/json" },
     // No pings; flag 4 drops link previews.
     body: JSON.stringify({ content, allowed_mentions: { parse: [] }, flags: 4 }),
   });
-  if (!res.ok) console.error("notify failed", { status: res.status, body: await res.text() });
+  if (!res.ok) console.error("send failed", { channel: channelId, status: res.status, body: await res.text() });
+  return res.ok;
+}
+
+/** Posts to the staff channel. */
+export async function notify(env: Env, content: string): Promise<void> {
+  await send(env, env.STAFF_CHANNEL_ID, content);
 }

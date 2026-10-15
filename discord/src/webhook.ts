@@ -1,9 +1,10 @@
-// GitHub webhook (pull_request, issues): a linked member earns a role as soon as their pull request merges or
-// their issue opens, without opening the link again.
+// GitHub webhook (pull_request, issues, star): a linked member earns a role as soon as their pull request merges
+// or their issue opens, without opening the link again; each 100th star is celebrated in #milestones.
 
 import { grant, notify, profile, roles, type Role } from "./guild.ts";
 import { verify } from "./hmac.ts";
 import type { Env } from "./index.ts";
+import { celebrate } from "./stars.ts";
 
 interface Item {
   number: number;
@@ -15,6 +16,7 @@ interface Payload {
   action: string;
   pull_request?: Item & { merged: boolean };
   issue?: Item;
+  repository?: { stargazers_count: number };
 }
 
 const done = () => new Response(null, { status: 204 });
@@ -25,7 +27,13 @@ export async function webhook(req: Request, env: Env): Promise<Response> {
   if (req.method !== "POST" || !(await verify(env.GITHUB_WEBHOOK_SECRET, body, signature))) {
     return new Response("Bad signature", { status: 401 });
   }
-  const earned = earnedBy(req.headers.get("X-GitHub-Event"), JSON.parse(body) as Payload, env);
+  const event = req.headers.get("X-GitHub-Event");
+  const payload = JSON.parse(body) as Payload;
+  if (event === "star" && payload.action === "created" && payload.repository) {
+    await celebrate(env, payload.repository.stargazers_count);
+    return done();
+  }
+  const earned = earnedBy(event, payload, env);
   if (!earned) return done();
   const { role, item, what } = earned;
   const discordId = await env.LINKS.get(`github:${item.user.id}`);

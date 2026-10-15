@@ -15,6 +15,9 @@ the GitHub roles.
 5. `/mentions` takes release notes signed with `MENTIONS_SECRET` and turns each `@login` of a linked member into
    a Discord mention. Auto Tag (`.github/workflows/auto-tag.yml`) uses it so the #releases post pings the people
    it thanks; the links stay private.
+6. `/webhook` also takes the repo's `star` events: each 100th star posts once in #milestones, with progress
+   toward `STAR_GOAL` and one-click links to share Codync on X, Threads, Reddit and LinkedIn. The last milestone
+   posted is kept in KV (`stars:milestone`), so unstarring and starring again doesn't repeat it.
 
 `.github/workflows/contributor.yml` comments the link on a contributor's first merged pull request and first
 issue. The onboarding Server Guide has a "Link your GitHub" to-do that leads to the link in #welcome.
@@ -23,12 +26,12 @@ issue. The onboarding Server Guide has a "Link your GitHub" to-do that leads to 
 
 - Discord application **Codync** (Developer Portal): OAuth2 redirect `https://discord.codync.dev/callback`; bot
   not public. In the server, its role keeps Manage Roles and Create Invite (`guilds.join` needs it), sits above
-  Contributor and Reporter, and can view and send in #moderator-only.
+  Contributor and Reporter, and can view and send in #moderator-only and #milestones (read-only for everyone else).
 - GitHub OAuth app **Codync Discord** (leepokai's developer settings): callback
   `https://discord.codync.dev/github/callback`, no scopes requested.
-- Repo webhook: `https://discord.codync.dev/webhook`, JSON, events `pull_request` and `issues`, secret =
+- Repo webhook: `https://discord.codync.dev/webhook`, JSON, events `pull_request`, `issues` and `star`, secret =
   `GITHUB_WEBHOOK_SECRET`.
-- `wrangler.toml` holds the public values (client ids, guild, role and channel ids, repo) and the `LINKS` KV
+- `wrangler.toml` holds the public values (client ids, guild, role and channel ids, star goal, repo) and the `LINKS` KV
   namespace.
 
 ```bash
