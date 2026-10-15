@@ -10,7 +10,7 @@ const env = {
   DISCORD_CLIENT_ID: "app", DISCORD_CLIENT_SECRET: "secret", DISCORD_BOT_TOKEN: "bot",
   GITHUB_CLIENT_ID: "ghapp", GITHUB_CLIENT_SECRET: "ghsecret", GITHUB_TOKEN: "gh", GITHUB_WEBHOOK_SECRET: "hook",
   SESSION_SECRET: "session", MENTIONS_SECRET: "notes", GUILD_ID: "guild", CONTRIBUTOR_ROLE_ID: "contributor", REPORTER_ROLE_ID: "reporter",
-  STAFF_CHANNEL_ID: "staff", MILESTONES_CHANNEL_ID: "milestones", STAR_GOAL: "1000", REPO: "leepokai/Codync",
+  STAFF_CHANNEL_ID: "staff", MILESTONES_CHANNEL_ID: "milestones", STAR_GOAL: "1000", DOWNLOAD_GOAL: "10000", REPO: "leepokai/Codync",
   LINKS: { get: async (k: string) => links.get(k) ?? null, put: async (k: string, v: string) => void links.set(k, v) },
 } as never;
 
@@ -173,13 +173,20 @@ assert.deepEqual(await notes("- Fast mode. Thanks @octo (#101).\n@Octo, @other, 
   text: "- Fast mode. Thanks <@42> (#101).\n<@42>, @other, @nobody, a@octo.dev, `@octo_x`",
   users: ["42"],
 });
-// Stars: each 100th star posts once in #milestones, with progress toward the goal until it's reached.
+// Milestones: each 100th star and 1,000th download posts once in #milestones and pings everyone, with progress
+// toward the goal until it's reached.
 const posts: string[] = [];
 let up = true;
+let releases: object[][] = [];
 globalThis.fetch = (async (input: string, init?: RequestInit) => {
-  assert.equal(String(input), "https://discord.com/api/v10/channels/milestones/messages");
+  const url = String(input);
+  const page = url.match(/^https:\/\/api\.github\.com\/repos\/leepokai\/Codync\/releases\?per_page=100&page=(\d+)$/)?.[1];
+  if (page) return Response.json(releases[Number(page) - 1] ?? []);
+  assert.equal(url, "https://discord.com/api/v10/channels/milestones/messages");
   if (!up) return new Response("down", { status: 503 });
-  posts.push(JSON.parse(String(init?.body)).content);
+  const body = JSON.parse(String(init?.body));
+  assert.deepEqual(body.allowed_mentions, { parse: ["everyone"] });
+  posts.push(body.content);
   return Response.json({});
 }) as typeof fetch;
 const star = (count: number, action = "created") => hook("star", { action, repository: { stargazers_count: count } });
@@ -193,9 +200,28 @@ up = true;
 for (const count of [402, 401, 400, 450, 1000, 1000, 1104]) assert.equal(await star(count), 204);
 const thanks = "Thanks to everyone who starred [leepokai/Codync](https://github.com/leepokai/Codync) 💛\n\n📣 ";
 assert.equal(posts.length, 3);
-assert.ok(posts[0].startsWith(`⭐ **Codync just hit 400 stars on GitHub!**\n\`████████░░░░░░░░░░░░\` 400 / 1,000\n${thanks}Help us reach 1,000: tell people about Codync on [X](https://x.com/intent/post?text=Codync%3A%20`));
-assert.ok(posts[1].startsWith(`🎉 **Codync hit 1,000 stars on GitHub, goal reached!**\n${thanks}Keep spreading the word on [X](`));
-assert.ok(posts[2].startsWith(`⭐ **Codync just hit 1,100 stars on GitHub!**\n${thanks}Keep spreading the word on [X](`));
+assert.ok(posts[0].startsWith(`@everyone ⭐ **Codync just hit 400 stars on GitHub!**\n\`████████░░░░░░░░░░░░\` 400 / 1,000\n${thanks}Help us reach 1,000: tell people about Codync on [X](https://x.com/intent/post?text=Codync%3A%20`));
+assert.ok(posts[1].startsWith(`@everyone 🎉 **Codync hit 1,000 stars on GitHub, goal reached!**\n${thanks}Keep spreading the word on [X](`));
+assert.ok(posts[2].startsWith(`@everyone ⭐ **Codync just hit 1,100 stars on GitHub!**\n${thanks}Keep spreading the word on [X](`));
 assert.match(posts[0], /\[Threads\]\(.+\) · \[Reddit\]\(.+url=https%3A%2F%2Fgithub.com%2Fleepokai%2FCodync.+\) · \[LinkedIn\]\(.+\), or wherever you hang out\.$/);
 assert.equal(links.get("stars:milestone"), "1100");
+
+// Downloads count installers across every release page, not updater files, checksums or host tarballs.
+posts.length = 0;
+const asset = (name: string, download_count: number) => ({ name, download_count });
+const release = (...assets: object[]) => ({ assets });
+releases = [
+  Array.from({ length: 100 }, (_, i) => release(asset("codync-macos.dmg", i === 0 ? 900 : 0), asset("latest-mac.yml", 5000))),
+  [release(asset("codync-windows-x64.exe", 80), asset("codync-windows-x64.exe.blockmap", 999), asset("codync-linux-x86_64.AppImage", 15),
+    asset("codync-linux-arm64.tar.gz", 4), asset("codync-host-linux-x86_64.tar.gz", 999), asset("codync-macos.zip", 999))],
+];
+const cron = () => worker.scheduled({} as ScheduledController, env);
+await cron();
+assert.deepEqual(posts, []);
+releases[1].push(release(asset("codync-linux-x86_64.deb", 1)));
+await cron();
+await cron();
+assert.equal(posts.length, 1);
+assert.ok(posts[0].startsWith("@everyone 📦 **Codync just hit 1,000 downloads!**\n`██░░░░░░░░░░░░░░░░░░` 1,000 / 10,000\nThanks to everyone who gave it a try 💛\n\n📣 Help us reach 10,000:"));
+assert.equal(links.get("downloads:milestone"), "1000");
 console.log("claim tests ok");
