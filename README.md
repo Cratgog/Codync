@@ -258,3 +258,13 @@ The desktop notch island's design is inspired by the work of [@novra.design](htt
 ## License
 
 Apache 2.0 for the code (see [NOTICE](NOTICE)); versions up to 2.11.0 were MIT. The Codync name, logo and the Codync Cloud relay are not covered, and hosted or multi-tenant services must run their own relay and accounts: see [TRADEMARK.md](TRADEMARK.md).
+
+## Star History
+
+<a href="https://www.star-history.com/#leepokai/Codync&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=leepokai/Codync&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=leepokai/Codync&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=leepokai/Codync&type=Date" />
+ </picture>
+</a>
