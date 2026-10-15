@@ -4,7 +4,7 @@
 import { grant, notify, profile, roles, type Role } from "./guild.ts";
 import { verify } from "./hmac.ts";
 import type { Env } from "./index.ts";
-import { celebrate } from "./stars.ts";
+import { celebrate } from "./milestones.ts";
 
 interface Item {
   number: number;
@@ -30,7 +30,7 @@ export async function webhook(req: Request, env: Env): Promise<Response> {
   const event = req.headers.get("X-GitHub-Event");
   const payload = JSON.parse(body) as Payload;
   if (event === "star" && payload.action === "created" && payload.repository) {
-    await celebrate(env, payload.repository.stargazers_count);
+    await celebrate(env, "stars", payload.repository.stargazers_count);
     return done();
   }
   const earned = earnedBy(event, payload, env);

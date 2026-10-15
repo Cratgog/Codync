@@ -20,7 +20,7 @@ export const names = (list: Role[]) => list.map((r) => r.name).join(" and ");
 export const profile = (login: string) => `[${login}](https://github.com/${login})`;
 
 const bot = (env: Env) => ({ Authorization: `Bot ${env.DISCORD_BOT_TOKEN}` });
-const github = (env: Env) => ({ headers: { Authorization: `Bearer ${env.GITHUB_TOKEN}`, "User-Agent": "codync-discord" } });
+export const github = (env: Env) => ({ headers: { Authorization: `Bearer ${env.GITHUB_TOKEN}`, "User-Agent": "codync-discord" } });
 
 /** The account's current login; names in connections go stale after a rename, ids don't. */
 export async function githubLogin(env: Env, githubId: string): Promise<string> {
@@ -71,13 +71,16 @@ export async function grant(env: Env, discordId: string, earned: Role[], reason:
   return missing;
 }
 
-/** Posts to a channel and says whether it went out. A failure is logged and never fails the caller's flow. */
-export async function send(env: Env, channelId: string, content: string): Promise<boolean> {
+/**
+ * Posts to a channel and says whether it went out. A failure is logged and never fails the caller's flow.
+ * Only the mention kinds in `pings` notify anyone (none by default).
+ */
+export async function send(env: Env, channelId: string, content: string, pings: "everyone"[] = []): Promise<boolean> {
   const res = await fetch(`${DISCORD}/channels/${channelId}/messages`, {
     method: "POST",
     headers: { ...bot(env), "Content-Type": "application/json" },
-    // No pings; flag 4 drops link previews.
-    body: JSON.stringify({ content, allowed_mentions: { parse: [] }, flags: 4 }),
+    // Flag 4 drops link previews.
+    body: JSON.stringify({ content, allowed_mentions: { parse: pings }, flags: 4 }),
   });
   if (!res.ok) console.error("send failed", { channel: channelId, status: res.status, body: await res.text() });
   return res.ok;
