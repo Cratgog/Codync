@@ -137,6 +137,17 @@ fn key(store: &Store, p: Provider) -> Result<String> {
     Ok(key.to_owned())
 }
 
+/// `CODYNC_OPENAI_BASE_URL` (e.g. `http://127.0.0.1:8890`) points the OpenAI engine at a
+/// compatible server on this computer instead of `api.openai.com`: local speech to text and
+/// text to speech. Unset, nothing changes.
+fn openai_base() -> Option<String> {
+    std::env::var("CODYNC_OPENAI_BASE_URL").ok().map(|s| s.trim().trim_end_matches('/').to_owned()).filter(|s| !s.is_empty())
+}
+
+fn openai_url(path: &str) -> String {
+    format!("{}{path}", openai_base().as_deref().unwrap_or("https://api.openai.com"))
+}
+
 /// Model ids and voices go into provider requests: letters, digits, `-`, `.`, `_`.
 fn checked(s: &str) -> Result<&str> {
     let ok = !s.is_empty() && s.len() <= 100 && s.chars().all(|c| c.is_ascii_alphanumeric() || "-._".contains(c));
@@ -167,7 +178,7 @@ async fn mint(p: Provider, key: &str, model: &str, voice: &str) -> Result<String
             });
             send(
                 p,
-                crate::http().post("https://api.openai.com/v1/realtime/client_secrets").bearer_auth(key).json(&body),
+                crate::http().post(openai_url("/v1/realtime/client_secrets")).bearer_auth(key).json(&body),
             )
             .await?
         }
@@ -247,7 +258,7 @@ pub async fn models(store: &Store, p: Provider) -> Result<Value> {
     let key = key(store, p)?;
     let entries: Vec<Model> = match p {
         Provider::OpenAi => {
-            let v = send(p, crate::http().get("https://api.openai.com/v1/models").bearer_auth(&key)).await?;
+            let v = send(p, crate::http().get(openai_url("/v1/models")).bearer_auth(&key)).await?;
             v["data"]
                 .as_array()
                 .into_iter()
@@ -429,7 +440,7 @@ pub async fn transcribe(store: &Store, p: Provider, model: &str, audio: &str) ->
             body.extend_from_slice(&wav);
             body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
             let req = crate::http()
-                .post("https://api.openai.com/v1/audio/transcriptions")
+                .post(openai_url("/v1/audio/transcriptions"))
                 .bearer_auth(&key)
                 .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
                 .body(body);
@@ -461,9 +472,11 @@ pub async fn speak(store: &Store, p: Provider, model: &str, voice: &str, text: &
     }
     match p {
         Provider::OpenAi => {
-            let body = json!({"model": model, "voice": voice, "input": text, "response_format": "aac"});
+            // A local server answers WAV (no AAC encoder needed); the phone plays both.
+            let format = if openai_base().is_some() { "wav" } else { "aac" };
+            let body = json!({"model": model, "voice": voice, "input": text, "response_format": format});
             let res = crate::http()
-                .post("https://api.openai.com/v1/audio/speech")
+                .post(openai_url("/v1/audio/speech"))
                 .bearer_auth(&key)
                 .json(&body)
                 .timeout(TIMEOUT * 4)
@@ -480,7 +493,7 @@ pub async fn speak(store: &Store, p: Provider, model: &str, voice: &str, text: &
                         .map_or_else(|| format!("{} answered {status}.", p.name()), str::to_owned)
                 );
             }
-            Ok(json!({"audio": STANDARD.encode(&bytes), "format": "aac"}))
+            Ok(json!({"audio": STANDARD.encode(&bytes), "format": format}))
         }
         Provider::Gemini => {
             let body = json!({
