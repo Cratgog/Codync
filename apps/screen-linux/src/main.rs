@@ -35,6 +35,8 @@ pub struct Helper {
     last_status: Mutex<Option<Value>>,
     sessions: Mutex<HashMap<String, stream::Session>>,
     out: Outbox,
+    /// GStreamer calls `ended` from its own threads, outside the Tokio runtime.
+    rt: tokio::runtime::Handle,
 }
 
 #[tokio::main]
@@ -79,6 +81,7 @@ async fn serve(sock: UnixStream, portal: &Arc<Mutex<Option<portal::Portal>>>) ->
         last_status: Mutex::new(None),
         sessions: Mutex::default(),
         out: out.clone(),
+        rt: tokio::runtime::Handle::current(),
     });
     helper.send_status().await;
     let watched = helper.clone();
@@ -241,7 +244,7 @@ impl Helper {
     pub fn ended(self: &Arc<Self>, id: &str) {
         let this = self.clone();
         let id = id.to_owned();
-        tokio::spawn(async move {
+        self.rt.spawn(async move {
             if let Some(s) = this.sessions.lock().await.remove(&id) {
                 s.close();
             }
